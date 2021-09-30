@@ -57,6 +57,20 @@ final class ViewsResource extends EntityResourceBase {
   }
 
   /**
+   * Extracts view argument values from the request.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The request.
+   *
+   * @return array
+   *   View arguments.
+   */
+  protected function getViewArguments(Request $request) {
+    $all_params = $request->query->all();
+    return $all_params['views-argument'] ?? [];
+  }
+
+  /**
    * Get views pager.
    *
    * @param \Drupal\views\ViewExecutable $view
@@ -126,7 +140,7 @@ final class ViewsResource extends EntityResourceBase {
     $exposed_params = \array_merge($exposed_filter_params, $exposed_sort_params);
     $view->setExposedInput($exposed_params);
 
-    return $view->preview($display_id);
+    return $view->preview($display_id, $this->getViewArguments($request));
   }
 
   /**
@@ -179,6 +193,7 @@ final class ViewsResource extends EntityResourceBase {
         'url.query_args:page',
         'url.query_args:views-filter',
         'url.query_args:views-sort',
+        'url.query_args:views-argument',
       ]);
       $response->addCacheableDependency($bubbleable_metadata);
     }
