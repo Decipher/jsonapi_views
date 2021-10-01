@@ -1,5 +1,6 @@
 name: 'JSON:API Views'
 type: module
+description: 'Provides a JSON:API resource for each view display.'
 core_version_requirement: ^8.8 || ^9
 dependencies:
   - drupal:views
