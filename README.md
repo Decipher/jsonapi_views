@@ -14,5 +14,5 @@ The URL of the JSON:API Views resource based on your current preview state is di
 - Pagination: `?page=#`
 - Exposed filters: `?views-filter[{{ filter }}]={{ value }}`
 - Contextual filters: `?views-argument[]={{ value }`
-  - Multiple arguiments as such `?views-argument[]={{ value }}&views-argument[]={{ value2 }}`
+  - Multiple arguments as such `?views-argument[]={{ value }}&views-argument[]={{ value2 }}`
 - Exposed sorts: `?views-sort[sort_by]={{ sortId }}`
