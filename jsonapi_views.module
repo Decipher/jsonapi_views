@@ -45,6 +45,11 @@ function jsonapi_views_views_preview_info_alter(&$rows, $executable) {
     }
   }
 
+  // Build Contextual filter queries.
+  foreach ($executable->args as $index => $arg) {
+    $query["views-argument[{$index}]"] = $arg;
+  }
+
   // Build JSON:API View URL.
   $url = Url::fromUri("internal:{$path}");
   $url->setOptions(['query' => $query]);
@@ -60,7 +65,7 @@ function jsonapi_views_views_preview_info_alter(&$rows, $executable) {
     ],
     [
       'data' => [
-        '#markup' => Link::fromTextAndUrl($url->toString(), $url)->toString(),
+        '#markup' => Link::fromTextAndUrl(urldecode($url->toString()), $url)->toString(),
       ],
     ],
   ];
