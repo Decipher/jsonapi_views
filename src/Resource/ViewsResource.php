@@ -23,16 +23,20 @@ use Symfony\Component\HttpFoundation\Request;
 final class ViewsResource extends EntityResourceBase {
 
   /**
-   * Extracts exposed filter values from the request.
+   * The request object.
    *
-   * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The request.
+   * @var \Symfony\Component\HttpFoundation\Request
+   */
+  protected $request;
+
+  /**
+   * Extracts exposed filter values from the request.
    *
    * @return array
    *   Key value pairs of exposed filters.
    */
-  protected function getExposedFilterParams(Request $request) {
-    $all_params = $request->query->all();
+  protected function getExposedFilterParams() {
+    $all_params = $this->request->query->all();
     $exposed_filter_params = isset($all_params['views-filter'])
       ? $all_params['views-filter']
       : [];
@@ -42,14 +46,11 @@ final class ViewsResource extends EntityResourceBase {
   /**
    * Extracts exposed sort values from the request.
    *
-   * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The request.
-   *
    * @return array
    *   Key value pairs of exposed sorts.
    */
-  protected function getExposedSortParams(Request $request) {
-    $all_params = $request->query->all();
+  protected function getExposedSortParams() {
+    $all_params = $this->request->query->all();
     $exposed_sort_params = isset($all_params['views-sort'])
       ? $all_params['views-sort']
       : [];
@@ -59,14 +60,11 @@ final class ViewsResource extends EntityResourceBase {
   /**
    * Extracts view argument values from the request.
    *
-   * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The request.
-   *
    * @return array
    *   View arguments.
    */
-  protected function getViewArguments(Request $request) {
-    $all_params = $request->query->all();
+  protected function getViewArguments() {
+    $all_params = $this->request->query->all();
     return $all_params['views-argument'] ?? [];
   }
 
@@ -104,7 +102,7 @@ final class ViewsResource extends EntityResourceBase {
       $options = [
         'query' => $pager_manager->getUpdatedParameters($parameters, $element, $current - 1),
       ];
-      $prev = Url::fromRoute('<current>', [], $options);
+      $prev = Url::fromUri($this->request->getUri(), $options);
       $pager_links = $pager_links->withLink('prev', new Link(new CacheableMetadata(), $prev, 'prev'));
     }
 
@@ -113,7 +111,7 @@ final class ViewsResource extends EntityResourceBase {
       $options = [
         'query' => $pager_manager->getUpdatedParameters($parameters, $element, $current + 1),
       ];
-      $next = Url::fromRoute('<current>', [], $options);
+      $next = Url::fromUri($this->request->getUri(), $options);
       $pager_links = $pager_links->withLink('next', new Link(new CacheableMetadata(), $next, 'next'));
     }
 
@@ -127,20 +125,18 @@ final class ViewsResource extends EntityResourceBase {
    *   An executable view instance.
    * @param string $display_id
    *   A display machine name.
-   * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The request.
    *
    * @return \Drupal\views\ViewExecutable\ViewExecutable
    *   The executed view with query parameters applied as exposed filters.
    */
-  protected function executeView(ViewExecutable &$view, string $display_id, Request $request) {
+  protected function executeView(ViewExecutable &$view, string $display_id) {
     // Get params from request.
-    $exposed_filter_params = $this->getExposedFilterParams($request);
-    $exposed_sort_params = $this->getExposedSortParams($request);
+    $exposed_filter_params = $this->getExposedFilterParams();
+    $exposed_sort_params = $this->getExposedSortParams();
     $exposed_params = \array_merge($exposed_filter_params, $exposed_sort_params);
     $view->setExposedInput($exposed_params);
 
-    return $view->preview($display_id, $this->getViewArguments($request));
+    return $view->preview($display_id, $this->getViewArguments());
   }
 
   /**
@@ -158,16 +154,20 @@ final class ViewsResource extends EntityResourceBase {
   public function process(Request $request): ResourceResponse {
     $view = Views::getView($request->get('view'));
     assert($view instanceof ViewExecutable);
+
+    // Set the request.
+    $this->request = $request;
+
     $display_id = $request->get('display');
 
     // @todo Check access properly.
     if (!$view->access([$display_id])) {
-      return $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $request, 403, []);
+      return $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
     }
 
     $context = new RenderContext();
     \Drupal::service('renderer')->executeInRenderContext($context, function () use (&$view, $display_id, $request) {
-      return $this->executeView($view, $display_id, $request);
+      return $this->executeView($view, $display_id);
     });
 
     // Handle any bubbled cacheability metadata.
@@ -187,7 +187,7 @@ final class ViewsResource extends EntityResourceBase {
     $data = $this->createCollectionDataFromEntities($entities);
     list($pagination_links, $total_count) = $this->getViewsPager($view);
 
-    $response = $this->createJsonapiResponse($data, $request, 200, [], $pagination_links, ['count' => $total_count]);
+    $response = $this->createJsonapiResponse($data, $this->request, 200, [], $pagination_links, ['count' => $total_count]);
     if (isset($bubbleable_metadata)) {
       $bubbleable_metadata->addCacheContexts([
         'url.query_args:page',
