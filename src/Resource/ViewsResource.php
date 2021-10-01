@@ -174,7 +174,7 @@ final class ViewsResource extends EntityResourceBase {
     }
 
     $context = new RenderContext();
-    \Drupal::service('renderer')->executeInRenderContext($context, function () use (&$view, $display_id, $request) {
+    \Drupal::service('renderer')->executeInRenderContext($context, function () use (&$view, $display_id) {
       return $this->executeView($view, $display_id);
     });
 
