@@ -160,9 +160,17 @@ final class ViewsResource extends EntityResourceBase {
 
     $display_id = $request->get('display');
 
+    $view->setDisplay($display_id);
+    $extenders = $view->getDisplay()->getExtenders();
     // @todo Check access properly.
-    if (!$view->access([$display_id])) {
-      return $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
+    if (!$view->access([$display_id]) || (!empty($extenders['jsonapi_views']) && !$extenders['jsonapi_views']->isExposed())) {
+      $response = $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
+      // Add view entity cache tag, so when it is changed, the result is
+      // invalidated.
+      $cacheable_metadata = new CacheableMetadata();
+      $cacheable_metadata->addCacheTags(['config:views.view.' . $view->id()]);
+      $response->addCacheableDependency($cacheable_metadata);
+      return $response;
     }
 
     $context = new RenderContext();

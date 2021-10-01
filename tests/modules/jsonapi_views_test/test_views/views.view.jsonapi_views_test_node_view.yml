@@ -640,7 +640,9 @@ display:
     display_title: Feed
     position: 5
     display_options:
-      display_extenders: {  }
+      display_extenders:
+        jsonapi_views:
+          enabled: false
       row:
         type: node_rss
         options: {  }

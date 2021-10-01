@@ -171,6 +171,14 @@ class JsonapiViewsResourceTest extends ViewTestBase {
     $this->assertEqual(1, $response_document['meta']['count']);
     $this->assertSame($location->uuid(), $response_document['data'][0]['id']);
     $this->assertCacheContext($headers, 'url.query_args:page');
+
+    // Un-exposed display.
+    $request_options = [];
+    $request_options[RequestOptions::HEADERS]['Accept'] = 'application/vnd.api+json';
+    $request_options = NestedArray::mergeDeep($request_options, $this->getAuthenticationRequestOptions());
+
+    $response = $this->request('GET', $this->getJsonApiViewUrl('jsonapi_views_test_node_view', 'feed_1'), $request_options);
+    $this->assertSame(403, $response->getStatusCode(), var_export(Json::decode((string) $response->getBody()), TRUE));
   }
 
   /**

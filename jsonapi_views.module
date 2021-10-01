@@ -21,6 +21,12 @@ function jsonapi_views_views_preview_info_alter(&$rows, $executable) {
     $executable->current_display,
   ]);
 
+  // Only show preview if view is allowed to be exposed via JSON:API.
+  $extenders = $executable->getDisplay($executable->current_display)->getExtenders();
+  if (!empty($extenders['jsonapi_views']) && !$extenders['jsonapi_views']->isExposed()) {
+    return;
+  }
+
   // Build Exposed sort queries.
   $query = [];
   $input = $executable->getExposedInput();
