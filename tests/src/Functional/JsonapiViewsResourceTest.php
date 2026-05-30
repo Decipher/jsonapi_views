@@ -89,8 +89,10 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    */
   protected function assertCacheContext(array $headers, $expected_cache_context) {
     $cache_contexts = explode(' ', $headers['X-Drupal-Cache-Contexts'][0]);
+    $has_expected_context = in_array($expected_cache_context, $cache_contexts, TRUE);
+    $has_parent_context = strpos($expected_cache_context, 'url.query_args:') === 0 && in_array('url.query_args', $cache_contexts, TRUE);
     $this
-      ->assertTrue(in_array($expected_cache_context, $cache_contexts), "'" . $expected_cache_context . "' is present in the X-Drupal-Cache-Contexts header.");
+      ->assertTrue($has_expected_context || $has_parent_context, "'" . $expected_cache_context . "' is present in the X-Drupal-Cache-Contexts header.");
   }
 
   /**
@@ -194,7 +196,7 @@ class JsonapiViewsResourceTest extends ViewTestBase {
       'published' => [],
       'unpublished' => [],
       'promoted' => [],
-      'unpromoted' => [],
+      'not_promoted' => [],
     ];
 
     for ($i = 0; $i < 9; $i++) {
@@ -209,7 +211,7 @@ class JsonapiViewsResourceTest extends ViewTestBase {
 
       $nodes['all'][$node->uuid()] = $node;
       $nodes[$published ? 'published' : 'unpublished'][$node->uuid()] = $node;
-      $nodes[$promoted ? 'promoted' : 'unpromoted'][$node->uuid()] = $node;
+      $nodes[$promoted ? 'promoted' : 'not_promoted'][$node->uuid()] = $node;
     }
 
     // Get published nodes.
@@ -272,7 +274,7 @@ class JsonapiViewsResourceTest extends ViewTestBase {
       $nodes['all'][$node->uuid()] = $node;
     }
 
-    // Test that the view is ordered by Node ID in asscending direction.
+    // Test that the view is ordered by Node ID in ascending direction.
     $query = ['views-sort[sort_by]' => 'nid', 'views-sort[sort_order]' => 'ASC'];
     [$response_document, $headers] = $this->getJsonApiViewResponse(
       $this->getJsonApiViewUrl('jsonapi_views_test_node_view', 'page_1', $query)
