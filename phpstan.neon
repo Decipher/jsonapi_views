@@ -9,6 +9,8 @@
 
 parameters:
 
+  treatPhpDocTypesAsCertain: false
+
   level: 7
 
   paths:
@@ -27,9 +29,28 @@ parameters:
       messages:
         - '#.* no value type specified in iterable type array#'
         - '#.* has no return type specified#'
+        - '#.* has parameter .* with no type specified#'
       paths:
         - web/modules/custom/*
         - web/themes/custom/*
+      reportUnmatched: false
+
+    -
+      # Unsafe usage of new static() - Drupal core pattern for Controllers, Forms, ListBuilders, Derivers
+      messages:
+        - '#Unsafe usage of new static#'
+      reportUnmatched: false
+
+    -
+      # treatPhpDocTypesAsCertain warnings - Drupal core PHPDoc types are often imprecise
+      messages:
+        - '#Because the type is coming from a PHPDoc#'
+      reportUnmatched: false
+
+    -
+      # Access to undefined property passRaw on User entities - Drupal test pattern
+      messages:
+        - '#Access to an undefined property.*passRaw#'
       reportUnmatched: false
 
   reportUnmatchedIgnoredErrors: false

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Drupal\jsonapi_views\Plugin\views\display_extender;
 
 use Drupal\Core\Form\FormStateInterface;

@@ -1,18 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Drupal\jsonapi_views\Resource;
 
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Pager\PagerManagerInterface;
-use Drupal\Core\Render\BubbleableMetadata;
 use Drupal\Core\Render\RenderContext;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Url;
+use Drupal\jsonapi\CacheableResourceResponse;
 use Drupal\jsonapi\JsonApiResource\Link;
 use Drupal\jsonapi\JsonApiResource\LinkCollection;
 use Drupal\jsonapi\ResourceResponse;
 use Drupal\jsonapi_resources\Resource\EntityResourceBase;
+use Drupal\jsonapi_views\Plugin\views\display_extender\JsonapiViews;
 use Drupal\views\ResultRow;
 use Drupal\views\ViewExecutable;
 use Drupal\views\Views;
@@ -156,13 +159,13 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
   /**
    * Executes a view display with url parameters.
    *
-   * @param \Drupal\views\ViewExecutable\ViewExecutable $view
+   * @param \Drupal\views\ViewExecutable $view
    *   An executable view instance.
    * @param string $display_id
    *   A display machine name.
    *
-   * @return \Drupal\views\ViewExecutable\ViewExecutable
-   *   The executed view with query parameters applied as exposed filters.
+   * @return array
+   *   The preview result from the executed view.
    */
   protected function executeView(ViewExecutable &$view, string $display_id) {
     // Get params from request.
@@ -200,14 +203,12 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
 
     $view->setDisplay($display_id);
     $extenders = $view->getDisplay()->getExtenders();
+    $jsonapi_extender = $extenders['jsonapi_views'] ?? NULL;
     // @todo Check access properly.
-    if (!$view->access([$display_id]) || (!empty($extenders['jsonapi_views']) && !$extenders['jsonapi_views']->isExposed())) {
+    if (!$view->access($display_id) || ($jsonapi_extender instanceof JsonapiViews && !$jsonapi_extender->isExposed())) {
       $response = $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
-      // Add view entity cache tag, so when it is changed, the result is
-      // invalidated.
-      $cacheable_metadata = new CacheableMetadata();
-      $cacheable_metadata->addCacheTags(['config:views.view.' . $view->id()]);
-      $response->addCacheableDependency($cacheable_metadata);
+      assert($response instanceof CacheableResourceResponse);
+      $response->addCacheableDependency($view->getDisplay()->getCacheMetadata());
       return $response;
     }
 
@@ -216,16 +217,13 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
       return $this->executeView($view, $display_id);
     });
 
-    // Handle any bubbled cacheability metadata.
+    // Collect cacheability from the view's display handler.
+    $cacheability = $view->getDisplay()->getCacheMetadata();
+
+    // Merge in any cacheability that bubbled up during rendering.
     if (!$context->isEmpty()) {
-      $bubbleable_metadata = $context->pop();
-      BubbleableMetadata::createFromObject($view->result)
-        ->merge($bubbleable_metadata);
+      $cacheability = $cacheability->merge(CacheableMetadata::createFromObject($context->pop()));
     }
-    else {
-      $bubbleable_metadata = BubbleableMetadata::createFromObject($view->result);
-    }
-    $bubbleable_metadata->addCacheTags($view->getCacheTags());
 
     $entities = array_map(function (ResultRow $row) {
       return $row->_entity;
@@ -234,15 +232,14 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
     [$pagination_links, $total_count] = $this->getViewsPager($view);
 
     $response = $this->createJsonapiResponse($data, $this->request, 200, [], $pagination_links, ['count' => $total_count]);
-    if (isset($bubbleable_metadata)) {
-      $bubbleable_metadata->addCacheContexts([
-        'url.query_args:page',
-        'url.query_args:views-filter',
-        'url.query_args:views-sort',
-        'url.query_args:views-argument',
-      ]);
-      $response->addCacheableDependency($bubbleable_metadata);
-    }
+    assert($response instanceof CacheableResourceResponse);
+    $cacheability->addCacheContexts([
+      'url.query_args:page',
+      'url.query_args:views-filter',
+      'url.query_args:views-sort',
+      'url.query_args:views-argument',
+    ]);
+    $response->addCacheableDependency($cacheability);
     return $response;
   }
 
