@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Drupal\Tests\jsonapi_views\Functional;
 
 use Drupal\Component\Serialization\Json;
@@ -9,6 +11,7 @@ use Drupal\Tests\jsonapi\Functional\JsonApiRequestTestTrait;
 use Drupal\Tests\views\Functional\ViewTestBase;
 use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
+use Drupal\user\UserInterface;
 use Drupal\views\Tests\ViewTestData;
 use GuzzleHttp\RequestOptions;
 
@@ -24,7 +27,7 @@ class JsonapiViewsResourceTest extends ViewTestBase {
   /**
    * The account to use for authentication.
    *
-   * @var null|\Drupal\Core\Session\AccountInterface
+   * @var null|\Drupal\user\UserInterface
    */
   protected $account;
 
@@ -75,7 +78,9 @@ class JsonapiViewsResourceTest extends ViewTestBase {
     // Create an account, which tests will use. Also ensure the @current_user
     // service this account, to ensure certain access check logic in tests works
     // as expected.
-    $this->account = $this->createUser();
+    $account = $this->createUser();
+    assert($account instanceof UserInterface);
+    $this->account = $account;
     $this->container->get('current_user')->setAccount($this->account);
   }
 
@@ -114,7 +119,9 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    * Tests that the test view has been enabled.
    */
   public function testNodeViewExists() {
-    $this->drupalLogin($this->drupalCreateUser(['access content']));
+    $account = $this->drupalCreateUser(['access content']);
+    assert($account instanceof UserInterface);
+    $this->drupalLogin($account);
 
     $this->drupalGet('jsonapi-views-test-node-view');
     $this->assertSession()->statusCodeEquals(200);
@@ -130,7 +137,9 @@ class JsonapiViewsResourceTest extends ViewTestBase {
     $location = $this->drupalCreateNode(['type' => 'location']);
     $room = $this->drupalCreateNode(['type' => 'room']);
 
-    $this->drupalLogin($this->drupalCreateUser(['access content']));
+    $account = $this->drupalCreateUser(['access content']);
+    assert($account instanceof UserInterface);
+    $this->drupalLogin($account);
 
     // Page display.
     [$response_document, $headers] = $this->getJsonApiViewResponse(
@@ -187,10 +196,12 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    * Tests the JSON:API Views resource Exposed Filters feature.
    */
   public function testJsonApiViewsResourceExposedFilters() {
-    $this->drupalLogin($this->drupalCreateUser([
+    $account = $this->drupalCreateUser([
       'access content',
       'bypass node access',
-    ]));
+    ]);
+    assert($account instanceof UserInterface);
+    $this->drupalLogin($account);
 
     $nodes = [
       'published' => [],
@@ -261,7 +272,9 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    * Tests the JSON:API Views resource Exposed Sort feature.
    */
   public function testJsonApiViewsResourceExposedSort() {
-    $this->drupalLogin($this->drupalCreateUser(['access content']));
+    $account = $this->drupalCreateUser(['access content']);
+    assert($account instanceof UserInterface);
+    $this->drupalLogin($account);
 
     $nodes = [];
     for ($i = 0; $i < 5; $i++) {
@@ -306,11 +319,14 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    * Tests the JSON:API Views resource View Arguments feature.
    */
   public function testJsonApiViewsResourceViewArguments() {
-    $this->drupalLogin($this->drupalCreateUser([
+    $account = $this->drupalCreateUser([
       'access content',
       'bypass node access',
-    ]));
+    ]);
+    assert($account instanceof UserInterface);
+    $this->drupalLogin($account);
 
+    /** @var array<string, array<string, \Drupal\node\NodeInterface>> $nodes */
     $nodes = [];
     $created_dates = [
       '2021-02-24',
@@ -347,6 +363,7 @@ class JsonapiViewsResourceTest extends ViewTestBase {
     $this->assertCount(3, $response_document['data']);
     $this->assertEquals(3, $response_document['meta']['count']);
     $this->assertArrayNotHasKey('next', $response_document['links']);
+    assert(array_key_exists('2020', $nodes));
     $this->assertSame(array_keys($nodes['2020']), array_map(static function (array $data) {
       return $data['id'];
     }, $response_document['data']));
@@ -385,7 +402,9 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    * Tests the JSON:API Views resource Pager feature.
    */
   public function testJsonApiViewsResourcePager() {
-    $this->drupalLogin($this->drupalCreateUser(['access content']));
+    $account = $this->drupalCreateUser(['access content']);
+    assert($account instanceof UserInterface);
+    $this->drupalLogin($account);
 
     $nodes = [];
 
@@ -493,7 +512,7 @@ class JsonapiViewsResourceTest extends ViewTestBase {
   protected function getAuthenticationRequestOptions() {
     return [
       'headers' => [
-        'Authorization' => 'Basic ' . base64_encode($this->account->name->value . ':' . $this->account->passRaw),
+        'Authorization' => 'Basic ' . base64_encode($this->account->getAccountName() . ':' . $this->account->passRaw),
       ],
     ];
   }
@@ -501,7 +520,7 @@ class JsonapiViewsResourceTest extends ViewTestBase {
   /**
    * Get a JSON:API Views resource response document.
    *
-   * @param \Drupal\core\Url $url
+   * @param \Drupal\Core\Url $url
    *   The url for a JSON:API View.
    *
    * @return array
@@ -531,10 +550,10 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    *   The View name.
    * @param string $display_id
    *   The View display id.
-   * @param string $query
-   *   A query object to add to the request.
+   * @param array $query
+   *   An array of query parameters to add to the request.
    *
-   * @return \Drupal\core\Url
+   * @return \Drupal\Core\Url
    *   The url for a JSON:API View.
    */
   protected function getJsonApiViewUrl($view_name, $display_id, $query = []) {
