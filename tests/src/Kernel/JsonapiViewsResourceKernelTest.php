@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Drupal\Tests\jsonapi_views\Kernel;
 
 use Drupal\Core\Cache\CacheableResponseInterface;
+use Drupal\Core\Form\FormState;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\jsonapi_resources\Kernel\Traits\RequestTrait;
 use Drupal\Tests\node\Traits\NodeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use Drupal\jsonapi_views\Plugin\views\display_extender\JsonapiViews;
 use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
 use Drupal\user\UserInterface;
 use Drupal\views\Tests\ViewTestData;
+use Drupal\views\Views;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -228,6 +231,65 @@ final class JsonapiViewsResourceKernelTest extends KernelTestBase {
       [$published->uuid(), $unpublished->uuid()],
       array_map(static fn(array $data) => $data['id'], $document['data']),
     );
+  }
+
+  /**
+   * Tests the JsonapiViews display extender's admin options form.
+   *
+   * BuildOptionsForm() and submitOptionsForm() only act when the form
+   * state's "section" matches this extender's plugin ID - Views calls
+   * every extender's hooks unconditionally for every settings section, so
+   * each extender is responsible for ignoring sections that aren't its own.
+   */
+  public function testDisplayExtenderOptionsForm(): void {
+    $view = Views::getView('jsonapi_views_test_node_view');
+    $view->setDisplay('page_1');
+    $extenders = $view->getDisplay()->getExtenders();
+    $extender = $extenders['jsonapi_views'] ?? NULL;
+    $this->assertInstanceOf(JsonapiViews::class, $extender);
+
+    // Enabled by default (JsonapiViews::defineOptions()).
+    $this->assertTrue($extender->isExposed());
+
+    // A section that isn't this extender's own: no form element is added.
+    $form = [];
+    $form_state = new FormState();
+    $form_state->set('section', 'other_section');
+    $extender->buildOptionsForm($form, $form_state);
+    $this->assertArrayNotHasKey('enabled', $form);
+
+    // This extender's own section: the checkbox is added, defaulting to
+    // the current (enabled) state.
+    $form = [];
+    $form_state = new FormState();
+    $form_state->set('section', 'jsonapi_views');
+    $extender->buildOptionsForm($form, $form_state);
+    $this->assertArrayHasKey('enabled', $form);
+    $this->assertSame('checkbox', $form['enabled']['#type']);
+    $this->assertTrue($form['enabled']['#default_value']);
+
+    // Submitting a non-matching section leaves the option untouched.
+    $submitted_form = [];
+    $form_state = new FormState();
+    $form_state->set('section', 'other_section');
+    $form_state->setValue('enabled', FALSE);
+    $extender->submitOptionsForm($submitted_form, $form_state);
+    $this->assertTrue($extender->isExposed());
+
+    // Submitting this extender's own section stores the new value.
+    $submitted_form = [];
+    $form_state = new FormState();
+    $form_state->set('section', 'jsonapi_views');
+    $form_state->setValue('enabled', FALSE);
+    $extender->submitOptionsForm($submitted_form, $form_state);
+    $this->assertFalse($extender->isExposed());
+
+    // optionsSummary() reflects the option regardless of section.
+    $categories = [];
+    $options = [];
+    $extender->optionsSummary($categories, $options);
+    $this->assertSame('JSON:API', (string) $categories['jsonapi_views']['title']);
+    $this->assertSame('No', (string) $options['jsonapi_views']['value']);
   }
 
 }
