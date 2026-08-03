@@ -1,0 +1,56 @@
+##
+# Configuration file for PHPStan static code checking, see https://phpstan.org .
+#
+# Note that drupal-specific rules are automatically included by phpstan/extension-installer
+# from vendor/mglaman/phpstan-drupal/extension.neon and vendor/mglaman/phpstan-drupal/rules.neon
+# @see https://github.com/mglaman/phpstan-drupal
+#
+# Paths are passed as CLI arguments.
+
+parameters:
+
+  treatPhpDocTypesAsCertain: false
+
+  level: 7
+
+  paths:
+    - web/modules/custom
+    - web/themes/custom
+
+  excludePaths:
+    - vendor/*
+    - node_modules/*
+    - ../*/node_modules/*
+
+  ignoreErrors:
+    -
+      # Hook implementations do not provide docblocks for parameters, so there
+      # is no way to provide this information.
+      messages:
+        - '#.* no value type specified in iterable type array#'
+        - '#.* has no return type specified#'
+        - '#.* has parameter .* with no type specified#'
+      paths:
+        - web/modules/custom/*
+        - web/themes/custom/*
+      reportUnmatched: false
+
+    -
+      # Unsafe usage of new static() - Drupal core pattern for Controllers, Forms, ListBuilders, Derivers
+      messages:
+        - '#Unsafe usage of new static#'
+      reportUnmatched: false
+
+    -
+      # treatPhpDocTypesAsCertain warnings - Drupal core PHPDoc types are often imprecise
+      messages:
+        - '#Because the type is coming from a PHPDoc#'
+      reportUnmatched: false
+
+    -
+      # Access to undefined property passRaw on User entities - Drupal test pattern
+      messages:
+        - '#Access to an undefined property.*passRaw#'
+      reportUnmatched: false
+
+  reportUnmatchedIgnoredErrors: false

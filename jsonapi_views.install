@@ -5,6 +5,8 @@
  * Install and update hooks for the jsonapi_views module.
  */
 
+declare(strict_types=1);
+
 /**
  * Implements hook_install().
  */
