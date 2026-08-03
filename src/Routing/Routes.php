@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Drupal\jsonapi_views\Routing;
 
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
@@ -14,7 +16,7 @@ use Symfony\Component\Routing\RouteCollection;
 /**
  * Defines dynamic routes.
  *
- * Each Views view and display comnbination will result in
+ * Each Views view and display combination will result in
  * a jsonapi resource at: /{jsonapi_namespace}/views/{view_id}/{display_id}
  */
 class Routes implements ContainerInjectionInterface {

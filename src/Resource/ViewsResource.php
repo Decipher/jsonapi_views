@@ -1,18 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Drupal\jsonapi_views\Resource;
 
 use Drupal\Core\Cache\CacheableMetadata;
-use Drupal\Core\Render\BubbleableMetadata;
+use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Pager\PagerManagerInterface;
 use Drupal\Core\Render\RenderContext;
+use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Url;
+use Drupal\jsonapi\CacheableResourceResponse;
 use Drupal\jsonapi\JsonApiResource\Link;
 use Drupal\jsonapi\JsonApiResource\LinkCollection;
 use Drupal\jsonapi\ResourceResponse;
 use Drupal\jsonapi_resources\Resource\EntityResourceBase;
+use Drupal\jsonapi_views\Plugin\views\display_extender\JsonapiViews;
 use Drupal\views\ResultRow;
 use Drupal\views\ViewExecutable;
 use Drupal\views\Views;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -20,7 +27,7 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * @internal
  */
-final class ViewsResource extends EntityResourceBase {
+final class ViewsResource extends EntityResourceBase implements ContainerInjectionInterface {
 
   /**
    * The request object.
@@ -30,6 +37,43 @@ final class ViewsResource extends EntityResourceBase {
   protected $request;
 
   /**
+   * The pager manager.
+   *
+   * @var \Drupal\Core\Pager\PagerManagerInterface
+   */
+  protected $pagerManager;
+
+  /**
+   * The renderer.
+   *
+   * @var \Drupal\Core\Render\RendererInterface
+   */
+  protected $renderer;
+
+  /**
+   * Constructs a ViewsResource object.
+   *
+   * @param \Drupal\Core\Pager\PagerManagerInterface $pager_manager
+   *   The pager manager.
+   * @param \Drupal\Core\Render\RendererInterface $renderer
+   *   The renderer.
+   */
+  public function __construct(PagerManagerInterface $pager_manager, RendererInterface $renderer) {
+    $this->pagerManager = $pager_manager;
+    $this->renderer = $renderer;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('pager.manager'),
+      $container->get('renderer')
+    );
+  }
+
+  /**
    * Extracts exposed filter values from the request.
    *
    * @return array
@@ -37,9 +81,7 @@ final class ViewsResource extends EntityResourceBase {
    */
   protected function getExposedFilterParams() {
     $all_params = $this->request->query->all();
-    $exposed_filter_params = isset($all_params['views-filter'])
-      ? $all_params['views-filter']
-      : [];
+    $exposed_filter_params = $all_params['views-filter'] ?? [];
     return $exposed_filter_params;
   }
 
@@ -51,9 +93,7 @@ final class ViewsResource extends EntityResourceBase {
    */
   protected function getExposedSortParams() {
     $all_params = $this->request->query->all();
-    $exposed_sort_params = isset($all_params['views-sort'])
-      ? $all_params['views-sort']
-      : [];
+    $exposed_sort_params = $all_params['views-sort'] ?? [];
     return $exposed_sort_params;
   }
 
@@ -84,10 +124,8 @@ final class ViewsResource extends EntityResourceBase {
       return [$pager_links, count($view->result)];
     }
 
-    /** @var \Drupal\Core\Pager\PagerManagerInterface $pager_manager */
-    $pager_manager = \Drupal::service('pager.manager');
     $element = $view->pager->getPagerId();
-    $pager = $pager_manager->getPager($element);
+    $pager = $this->pagerManager->getPager($element);
 
     if (!$pager) {
       return [$pager_links, count($view->result)];
@@ -100,7 +138,7 @@ final class ViewsResource extends EntityResourceBase {
     // Add 'prev' link.
     if ($current > 0) {
       $options = [
-        'query' => $pager_manager->getUpdatedParameters($parameters, $element, $current - 1),
+        'query' => $this->pagerManager->getUpdatedParameters($parameters, $element, $current - 1),
       ];
       $prev = Url::fromUri($this->request->getUri(), $options);
       $pager_links = $pager_links->withLink('prev', new Link(new CacheableMetadata(), $prev, 'prev'));
@@ -109,7 +147,7 @@ final class ViewsResource extends EntityResourceBase {
     // Add 'next' link.
     if ($current < ($total - 1)) {
       $options = [
-        'query' => $pager_manager->getUpdatedParameters($parameters, $element, $current + 1),
+        'query' => $this->pagerManager->getUpdatedParameters($parameters, $element, $current + 1),
       ];
       $next = Url::fromUri($this->request->getUri(), $options);
       $pager_links = $pager_links->withLink('next', new Link(new CacheableMetadata(), $next, 'next'));
@@ -121,13 +159,13 @@ final class ViewsResource extends EntityResourceBase {
   /**
    * Executes a view display with url parameters.
    *
-   * @param \Drupal\views\ViewExecutable\ViewExecutable $view
+   * @param \Drupal\views\ViewExecutable $view
    *   An executable view instance.
    * @param string $display_id
    *   A display machine name.
    *
-   * @return \Drupal\views\ViewExecutable\ViewExecutable
-   *   The executed view with query parameters applied as exposed filters.
+   * @return array
+   *   The preview result from the executed view.
    */
   protected function executeView(ViewExecutable &$view, string $display_id) {
     // Get params from request.
@@ -152,59 +190,56 @@ final class ViewsResource extends EntityResourceBase {
    * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
    */
   public function process(Request $request): ResourceResponse {
-    $view = Views::getView($request->get('view'));
+    $view_id = $request->attributes->get('view');
+    assert(is_string($view_id));
+    $view = Views::getView($view_id);
     assert($view instanceof ViewExecutable);
 
     // Set the request.
     $this->request = $request;
 
-    $display_id = $request->get('display');
+    $display_id = $request->attributes->get('display');
+    assert(is_string($display_id));
 
     $view->setDisplay($display_id);
     $extenders = $view->getDisplay()->getExtenders();
+    $jsonapi_extender = $extenders['jsonapi_views'] ?? NULL;
     // @todo Check access properly.
-    if (!$view->access([$display_id]) || (!empty($extenders['jsonapi_views']) && !$extenders['jsonapi_views']->isExposed())) {
+    if (!$view->access($display_id) || ($jsonapi_extender instanceof JsonapiViews && !$jsonapi_extender->isExposed())) {
       $response = $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
-      // Add view entity cache tag, so when it is changed, the result is
-      // invalidated.
-      $cacheable_metadata = new CacheableMetadata();
-      $cacheable_metadata->addCacheTags(['config:views.view.' . $view->id()]);
-      $response->addCacheableDependency($cacheable_metadata);
+      assert($response instanceof CacheableResourceResponse);
+      $response->addCacheableDependency($view->getDisplay()->getCacheMetadata());
       return $response;
     }
 
     $context = new RenderContext();
-    \Drupal::service('renderer')->executeInRenderContext($context, function () use (&$view, $display_id) {
+    $this->renderer->executeInRenderContext($context, function () use (&$view, $display_id) {
       return $this->executeView($view, $display_id);
     });
 
-    // Handle any bubbled cacheability metadata.
+    // Collect cacheability from the view's display handler.
+    $cacheability = $view->getDisplay()->getCacheMetadata();
+
+    // Merge in any cacheability that bubbled up during rendering.
     if (!$context->isEmpty()) {
-      $bubbleable_metadata = $context->pop();
-      BubbleableMetadata::createFromObject($view->result)
-        ->merge($bubbleable_metadata);
+      $cacheability = $cacheability->merge(CacheableMetadata::createFromObject($context->pop()));
     }
-    else {
-      $bubbleable_metadata = BubbleableMetadata::createFromObject($view->result);
-    }
-    $bubbleable_metadata->addCacheTags($view->getCacheTags());
 
     $entities = array_map(function (ResultRow $row) {
       return $row->_entity;
     }, $view->result);
     $data = $this->createCollectionDataFromEntities($entities);
-    list($pagination_links, $total_count) = $this->getViewsPager($view);
+    [$pagination_links, $total_count] = $this->getViewsPager($view);
 
     $response = $this->createJsonapiResponse($data, $this->request, 200, [], $pagination_links, ['count' => $total_count]);
-    if (isset($bubbleable_metadata)) {
-      $bubbleable_metadata->addCacheContexts([
-        'url.query_args:page',
-        'url.query_args:views-filter',
-        'url.query_args:views-sort',
-        'url.query_args:views-argument',
-      ]);
-      $response->addCacheableDependency($bubbleable_metadata);
-    }
+    assert($response instanceof CacheableResourceResponse);
+    $cacheability->addCacheContexts([
+      'url.query_args:page',
+      'url.query_args:views-filter',
+      'url.query_args:views-sort',
+      'url.query_args:views-argument',
+    ]);
+    $response->addCacheableDependency($cacheability);
     return $response;
   }
 
