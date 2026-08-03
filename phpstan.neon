@@ -21,7 +21,10 @@ parameters:
     - vendor/*
     - node_modules/*
     - ../*/node_modules/*
-    - rector.php
+    # No leading `*/` - DrupalCI runs `phpstan analyze .` from the module's
+    # own checkout root, where this file sits at `rector.php` with no
+    # directory prefix at all, which `*/rector.php` would not match.
+    - '*rector.php'
 
   ignoreErrors:
     -
