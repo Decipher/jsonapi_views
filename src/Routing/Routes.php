@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Drupal\jsonapi_views\Routing;
 
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
@@ -22,36 +24,32 @@ class Routes implements ContainerInjectionInterface {
   const RESOURCE_NAME = ViewsResource::class;
 
   const JSONAPI_RESOURCE_KEY = '_jsonapi_resource';
+
   const JSONAPI_RESOURCE_TYPES_KEY = '_jsonapi_resource_types';
+
   const VIEW_KEY = 'view';
+
   const DISPLAY_KEY = 'display';
-
-  /**
-   * Resource type bundle repository.
-   *
-   * @var \Drupal\jsonapi\ResourceType\ResourceTypeRepositoryInterface
-   */
-  protected $resourceTypeRepository;
-
-  /**
-   * Entity type bundle info interface.
-   *
-   * @var \Drupal\Core\Entity\EntityTypeBundleInfoInterface
-   */
-  protected $entityTypeBundleInfo;
 
   /**
    * {@inheritdoc}
    */
-  public function __construct(ResourceTypeRepositoryInterface $resource_type_repository, EntityTypeBundleInfoInterface $entity_type_bundle_info) {
-    $this->resourceTypeRepository = $resource_type_repository;
-    $this->entityTypeBundleInfo = $entity_type_bundle_info;
+  public function __construct(
+    /**
+     * Resource type bundle repository.
+     */
+    protected ResourceTypeRepositoryInterface $resourceTypeRepository,
+    /**
+     * Entity type bundle info interface.
+     */
+    protected EntityTypeBundleInfoInterface $entityTypeBundleInfo,
+  ) {
   }
 
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container) {
+  public static function create(ContainerInterface $container): static {
     return new static(
       $container->get('jsonapi.resource_type.repository'),
       $container->get('entity_type.bundle.info')
@@ -61,7 +59,7 @@ class Routes implements ContainerInjectionInterface {
   /**
    * {@inheritdoc}
    */
-  public function routes() {
+  public function routes(): RouteCollection {
     $jsonapi_views_routes = new RouteCollection();
     $base_path = '/%jsonapi%/views';
     $views = Views::getEnabledViews();
@@ -77,9 +75,7 @@ class Routes implements ContainerInjectionInterface {
       $entity_type = $entity_type->id();
       $bundle_info = $this->entityTypeBundleInfo->getBundleInfo($entity_type);
       $bundles = array_keys($bundle_info);
-      $resource_types = array_map(function ($bundle) use ($entity_type) {
-        return $this->resourceTypeRepository->get($entity_type, $bundle)->getTypeName();
-      }, $bundles);
+      $resource_types = array_map(fn(int|string $bundle) => $this->resourceTypeRepository->get($entity_type, $bundle)->getTypeName(), $bundles);
 
       if (empty($resource_types)) {
         continue;
@@ -101,7 +97,7 @@ class Routes implements ContainerInjectionInterface {
           static::DISPLAY_KEY => $display_id,
         ]);
 
-        $jsonapi_views_routes->add("jsonapi_views.$view_name.$display_id", $views_display_route);
+        $jsonapi_views_routes->add(sprintf('jsonapi_views.%s.%s', $view_name, $display_id), $views_display_route);
       }
     }
 

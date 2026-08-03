@@ -1,0 +1,67 @@
+##
+# Configuration file for PHPStan static code checking, see https://phpstan.org .
+#
+# Note that drupal-specific rules are automatically included by phpstan/extension-installer
+# from vendor/mglaman/phpstan-drupal/extension.neon and vendor/mglaman/phpstan-drupal/rules.neon
+# @see https://github.com/mglaman/phpstan-drupal
+#
+# Paths are passed as CLI arguments.
+
+parameters:
+
+  treatPhpDocTypesAsCertain: false
+
+  level: 7
+
+  paths:
+    - web/modules/custom
+    - web/themes/custom
+
+  excludePaths:
+    - vendor/*
+    - node_modules/*
+    - ../*/node_modules/*
+    - rector.php
+
+  ignoreErrors:
+    -
+      # Hook implementations do not provide docblocks for parameters, so there
+      # is no way to provide this information. No `paths:` restriction here -
+      # DrupalCI runs `phpstan analyze .` from the module's own checkout
+      # root, reporting paths like `tests/...` with no `web/modules/custom/`
+      # prefix, so a path-scoped ignore silently never matches there even
+      # though it matches fine locally against the symlinked `build/` tree.
+      messages:
+        - '#.* no value type specified in iterable type array#'
+        - '#.* has no return type specified#'
+        - '#.* has parameter .* with no type specified#'
+      reportUnmatched: false
+
+    -
+      # Unsafe usage of new static() - Drupal core pattern for Controllers, Forms, ListBuilders, Derivers
+      messages:
+        - '#Unsafe usage of new static#'
+      reportUnmatched: false
+
+    -
+      # treatPhpDocTypesAsCertain warnings - Drupal core PHPDoc types are often imprecise
+      messages:
+        - '#Because the type is coming from a PHPDoc#'
+      reportUnmatched: false
+
+    -
+      # Access to undefined property passRaw on User entities - Drupal test pattern
+      messages:
+        - '#Access to an undefined property.*passRaw#'
+      reportUnmatched: false
+
+    -
+      # drupalCreateUser()/createUser() return User|false on Drupal 10's core
+      # stubs but UserInterface on Drupal 11's - the instanceof narrowing this
+      # module uses for D10 compatibility is redundant (but harmless) under D11.
+      messages:
+        - '#Call to function assert\(\) with true will always evaluate to true#'
+        - '#Instanceof between Drupal\\user\\UserInterface and Drupal\\user\\UserInterface will always evaluate to true#'
+      reportUnmatched: false
+
+  reportUnmatchedIgnoredErrors: false
