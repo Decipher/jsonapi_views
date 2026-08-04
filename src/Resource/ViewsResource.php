@@ -7,7 +7,6 @@ namespace Drupal\jsonapi_views\Resource;
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Pager\PagerManagerInterface;
-use Drupal\Core\Render\BubbleableMetadata;
 use Drupal\Core\Render\RenderContext;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Url;
@@ -195,37 +194,38 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
     $view->setDisplay($display_id);
     $extenders = $view->getDisplay()->getExtenders();
     $jsonapi_extender = $extenders['jsonapi_views'] ?? NULL;
+    // @todo Check access properly.
+    if (!$view->access($display_id) || ($jsonapi_extender instanceof JsonapiViews && !$jsonapi_extender->isExposed())) {
+      $response = $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
+      assert($response instanceof CacheableResourceResponse);
+      // Add the view's cache tags and contexts, so the denial is
+      // invalidated when the view changes and isn't cached across users
+      // or permissions the view's own plugins/handlers vary by. The view
+      // hasn't executed yet at this point (deliberately, to avoid running
+      // its query for a request that's being denied), so this reads the
+      // display's cacheability directly rather than from a render array.
+      $cacheable_metadata = CacheableMetadata::createFromObject($view->getDisplay()->getCacheMetadata());
+      $cacheable_metadata->addCacheTags(['config:views.view.' . $view->id()]);
+      $response->addCacheableDependency($cacheable_metadata);
+      return $response;
+    }
 
-    // Execute the view.
     $context = new RenderContext();
     $view_preview = $this->renderer->executeInRenderContext($context, function () use (&$view, $display_id) {
       return $this->executeView($view, $display_id);
     });
 
-    // Extract the cacheable metadata from the view preview.
-    $view_cacheable_metadata = CacheableMetadata::createFromRenderArray($view_preview);
+    // The view's own cacheability, aggregated from every plugin and
+    // handler on the display (filters, arguments, sorts, exposed form,
+    // query, pager, ...) and applied to $view_preview['#cache'] by
+    // DisplayPluginBase::render(). Building on the approach from
+    // yahyaalhamad's patch (#3202583, comment 11, Nov 2024).
+    $view_cacheability = CacheableMetadata::createFromRenderArray($view_preview);
 
-    // @todo Check access properly.
-    if (!$view->access($display_id) || ($jsonapi_extender instanceof JsonapiViews && !$jsonapi_extender->isExposed())) {
-      $response = $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
-      assert($response instanceof CacheableResourceResponse);
-      // Make sure to add the view cacheable metadata as a dependency.
-      $response->addCacheableDependency($view_cacheable_metadata);
-      return $response;
-    }
-
-    // Handle any bubbled cacheability metadata.
+    // Merge in any additional cacheability bubbled up during render.
     if (!$context->isEmpty()) {
-      $bubbleable_metadata = $context->pop();
-      BubbleableMetadata::createFromObject($view->result)
-        ->merge($bubbleable_metadata);
+      $view_cacheability = $view_cacheability->merge($context->pop());
     }
-    else {
-      $bubbleable_metadata = BubbleableMetadata::createFromObject($view->result);
-    }
-
-    // Make sure the response depends on the view cacheable metadata.
-    $bubbleable_metadata->addCacheableDependency($view_cacheable_metadata);
 
     $entities = array_map(fn(ResultRow $row) => $row->_entity, $view->result);
     $data = $this->createCollectionDataFromEntities($entities);
@@ -233,13 +233,13 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
 
     $response = $this->createJsonapiResponse($data, $this->request, 200, [], $pagination_links, ['count' => $total_count]);
     assert($response instanceof CacheableResourceResponse);
-    $bubbleable_metadata->addCacheContexts([
+    $view_cacheability->addCacheContexts([
       'url.query_args:page',
       'url.query_args:views-filter',
       'url.query_args:views-sort',
       'url.query_args:views-argument',
     ]);
-    $response->addCacheableDependency($bubbleable_metadata);
+    $response->addCacheableDependency($view_cacheability);
     return $response;
   }
 
