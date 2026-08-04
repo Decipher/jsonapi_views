@@ -6,6 +6,7 @@ namespace Drupal\Tests\jsonapi_views\Kernel;
 
 use Drupal\Core\Cache\CacheableResponseInterface;
 use Drupal\Core\Form\FormState;
+use Drupal\Core\Render\RenderContext;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\jsonapi_resources\Kernel\Traits\RequestTrait;
 use Drupal\Tests\node\Traits\NodeCreationTrait;
@@ -385,6 +386,37 @@ final class JsonapiViewsResourceKernelTest extends KernelTestBase {
     $this->grantPermissionsToTestedRole(['access content']);
     $response = $this->request($this->jsonApiRequest('jsonapi_views_test_node_view', 'page_1'));
     $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
+  }
+
+  /**
+   * Tests exposed filters use their identifier in the preview URL.
+   *
+   * The test view's "type" filter is exposed with identifier
+   * "content_type", which differs from its field name. The "status"
+   * filter's identifier matches its field name. The preview URL built by
+   * jsonapi_views_views_preview_info_alter() must key each filter's query
+   * parameter by its identifier. Otherwise the filter is dropped when the
+   * identifier differs from the field name. See #3376193.
+   */
+  public function testPreviewFilterIdentifier(): void {
+    $view = Views::getView('jsonapi_views_test_node_view');
+    $view->setDisplay('page_1');
+    $view->setExposedInput([
+      'content_type' => 'room',
+      'status' => '1',
+    ]);
+    $view->initHandlers();
+
+    $rows = [];
+    $renderer = $this->container->get('renderer');
+    $renderer->executeInRenderContext(new RenderContext(), static function () use (&$rows, $view): void {
+      jsonapi_views_views_preview_info_alter($rows, $view);
+    });
+
+    $markup = (string) $rows['query'][0][1]['data']['#markup'];
+    $this->assertStringContainsString('views-filter[content_type]=room', $markup);
+    $this->assertStringContainsString('views-filter[status]=1', $markup);
+    $this->assertStringNotContainsString('views-filter[type]', $markup);
   }
 
 }
