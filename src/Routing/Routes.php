@@ -63,6 +63,7 @@ class Routes implements ContainerInjectionInterface {
     $jsonapi_views_routes = new RouteCollection();
     $base_path = '/%jsonapi%/views';
     $views = Views::getEnabledViews();
+    $resource_by_entity_type = [];
 
     foreach ($views as $view) {
       $view_name = $view->id();
@@ -73,9 +74,15 @@ class Routes implements ContainerInjectionInterface {
         continue;
       }
       $entity_type = $entity_type->id();
-      $bundle_info = $this->entityTypeBundleInfo->getBundleInfo($entity_type);
-      $bundles = array_keys($bundle_info);
-      $resource_types = array_map(fn(int|string $bundle) => $this->resourceTypeRepository->get($entity_type, $bundle)->getTypeName(), $bundles);
+      if (array_key_exists($entity_type, $resource_by_entity_type)) {
+        $resource_types = $resource_by_entity_type[$entity_type];
+      }
+      else {
+        $bundle_info = $this->entityTypeBundleInfo->getBundleInfo($entity_type);
+        $bundles = array_keys($bundle_info);
+        $resource_types = array_map(fn(int|string $bundle) => $this->resourceTypeRepository->get($entity_type, $bundle)->getTypeName(), $bundles);
+        $resource_by_entity_type[$entity_type] = $resource_types;
+      }
 
       if (empty($resource_types)) {
         continue;
