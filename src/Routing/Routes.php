@@ -80,7 +80,7 @@ class Routes implements ContainerInjectionInterface {
       else {
         $bundle_info = $this->entityTypeBundleInfo->getBundleInfo($entity_type);
         $bundles = array_keys($bundle_info);
-        $resource_types = array_map(fn(int|string $bundle) => $this->resourceTypeRepository->get($entity_type, $bundle)->getTypeName(), $bundles);
+        $resource_types = array_map(fn(int|string $bundle) => $this->resourceTypeRepository->get($entity_type, (string) $bundle)->getTypeName(), $bundles);
         $resource_by_entity_type[$entity_type] = $resource_types;
       }
 
