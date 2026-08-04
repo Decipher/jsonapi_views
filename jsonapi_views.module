@@ -46,8 +46,12 @@ function jsonapi_views_views_preview_info_alter(array &$rows, ViewExecutable $ex
   // Build Exposed filter queries.
   $display_handler = $executable->getDisplay();
   foreach ($display_handler->view->filter as $filter) {
-    if ($filter->isExposed() && $input[$filter->field]) {
-      $query[sprintf('views-filter[%s]', $filter->field)] = $input[$filter->field];
+    if (!$filter->isExposed()) {
+      continue;
+    }
+    $identifier = $filter->options['expose']['identifier'] ?? $filter->field;
+    if (isset($input[$identifier])) {
+      $query[sprintf('views-filter[%s]', $identifier)] = $input[$identifier];
     }
   }
 
