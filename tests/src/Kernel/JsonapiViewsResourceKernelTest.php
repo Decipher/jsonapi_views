@@ -12,6 +12,7 @@ use Drupal\Tests\node\Traits\NodeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\jsonapi\ResourceType\ResourceTypeRepositoryInterface;
 use Drupal\jsonapi_views\Plugin\views\display_extender\JsonapiViews;
+use Drupal\node\Entity\NodeType;
 use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
 use Drupal\user\UserInterface;
@@ -363,6 +364,27 @@ final class JsonapiViewsResourceKernelTest extends KernelTestBase {
     $extender->optionsSummary($categories, $options);
     $this->assertSame('JSON:API', (string) $categories['jsonapi_views']['title']);
     $this->assertSame('No', (string) $options['jsonapi_views']['value']);
+  }
+
+  /**
+   * Tests route building when a bundle machine name is only digits.
+   *
+   * PHP's array_keys() turns an all-digit bundle ID, like "123", into an
+   * int. ResourceTypeRepository::get() asserts that its $bundle argument
+   * is a string. Routes::routes() must cast the bundle ID back to a
+   * string. See #3503402.
+   */
+  public function testNumericBundleMachineName(): void {
+    NodeType::create(['type' => '123', 'name' => '123'])->save();
+
+    // Routes::routes() loads every bundle of the view's base entity type,
+    // not just the bundles the view queries. Rebuilding the router must
+    // not throw when the numeric-machine-name bundle exists.
+    $this->container->get('router.builder')->rebuild();
+
+    $this->grantPermissionsToTestedRole(['access content']);
+    $response = $this->request($this->jsonApiRequest('jsonapi_views_test_node_view', 'page_1'));
+    $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
   }
 
 }
