@@ -195,22 +195,24 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
     $view->setDisplay($display_id);
     $extenders = $view->getDisplay()->getExtenders();
     $jsonapi_extender = $extenders['jsonapi_views'] ?? NULL;
+
+    // Execute the view.
+    $context = new RenderContext();
+    $view_preview = $this->renderer->executeInRenderContext($context, function () use (&$view, $display_id) {
+      return $this->executeView($view, $display_id);
+    });
+
+    // Extract the cacheable metadata from the view preview.
+    $view_cacheable_metadata = CacheableMetadata::createFromRenderArray($view_preview);
+
     // @todo Check access properly.
     if (!$view->access($display_id) || ($jsonapi_extender instanceof JsonapiViews && !$jsonapi_extender->isExposed())) {
       $response = $this->createJsonapiResponse($this->createCollectionDataFromEntities([]), $this->request, 403, []);
       assert($response instanceof CacheableResourceResponse);
-      // Add view entity cache tag, so when it is changed, the result is
-      // invalidated.
-      $cacheable_metadata = new CacheableMetadata();
-      $cacheable_metadata->addCacheTags(['config:views.view.' . $view->id()]);
-      $response->addCacheableDependency($cacheable_metadata);
+      // Make sure to add the view cacheable metadata as a dependency.
+      $response->addCacheableDependency($view_cacheable_metadata);
       return $response;
     }
-
-    $context = new RenderContext();
-    $this->renderer->executeInRenderContext($context, function () use (&$view, $display_id) {
-      return $this->executeView($view, $display_id);
-    });
 
     // Handle any bubbled cacheability metadata.
     if (!$context->isEmpty()) {
@@ -221,7 +223,9 @@ final class ViewsResource extends EntityResourceBase implements ContainerInjecti
     else {
       $bubbleable_metadata = BubbleableMetadata::createFromObject($view->result);
     }
-    $bubbleable_metadata->addCacheTags($view->getCacheTags());
+
+    // Make sure the response depends on the view cacheable metadata.
+    $bubbleable_metadata->addCacheableDependency($view_cacheable_metadata);
 
     $entities = array_map(fn(ResultRow $row) => $row->_entity, $view->result);
     $data = $this->createCollectionDataFromEntities($entities);
