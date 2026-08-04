@@ -10,10 +10,12 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\jsonapi_resources\Kernel\Traits\RequestTrait;
 use Drupal\Tests\node\Traits\NodeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use Drupal\jsonapi\ResourceType\ResourceTypeRepositoryInterface;
 use Drupal\jsonapi_views\Plugin\views\display_extender\JsonapiViews;
 use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
 use Drupal\user\UserInterface;
+use Drupal\views\Entity\View;
 use Drupal\views\Tests\ViewTestData;
 use Drupal\views\Views;
 use Symfony\Component\HttpFoundation\Request;
@@ -231,6 +233,77 @@ final class JsonapiViewsResourceKernelTest extends KernelTestBase {
       [$published->uuid(), $unpublished->uuid()],
       array_map(static fn(array $data) => $data['id'], $document['data']),
     );
+  }
+
+  /**
+   * Tests route building for two views that share one entity type.
+   *
+   * Routes::routes() caches the resource type names for each entity type
+   * (#3484714). A second view with the same entity type reuses that
+   * cache. It does not compute the names again. This test adds a second
+   * 'node' view and checks two things: the route gives the correct
+   * resource type, and the cache was used. A spy repository counts each
+   * call. If a future change breaks the cache, this test fails, even
+   * though the response stays correct.
+   */
+  public function testMultipleViewsShareEntityTypeResourceTypeCache(): void {
+    $this->grantPermissionsToTestedRole(['access content']);
+
+    $second_view = View::create([
+      'id' => 'jsonapi_views_test_node_view_2',
+      'label' => 'JSON:API Views Test Node View 2',
+      'base_table' => 'node_field_data',
+      'display' => [
+        'default' => [
+          'display_plugin' => 'default',
+          'id' => 'default',
+          'display_options' => [
+            'access' => ['type' => 'perm', 'options' => ['perm' => 'access content']],
+          ],
+        ],
+        'page_1' => [
+          'display_plugin' => 'page',
+          'id' => 'page_1',
+          'display_options' => [
+            'path' => 'jsonapi-views-test-node-view-2',
+          ],
+        ],
+      ],
+    ]);
+    $second_view->save();
+
+    // Replace the resource type repository with a spy. The spy counts
+    // each call to get(), by entity type and bundle.
+    $real_repository = $this->container->get('jsonapi.resource_type.repository');
+    assert($real_repository instanceof ResourceTypeRepositoryInterface);
+    $counting_repository = new CountingResourceTypeRepository($real_repository);
+    $this->container->set('jsonapi.resource_type.repository', $counting_repository);
+
+    $this->container->get('router.builder')->rebuild();
+
+    // Each bundle of the shared 'node' entity type must resolve once for
+    // the whole rebuild. One call for two views proves the second view
+    // used the cache.
+    foreach ($counting_repository->callsByBundle as $key => $count) {
+      $this->assertSame(1, $count, "$key resolved more than once across the two views.");
+    }
+
+    $room = $this->createNode(['type' => 'room', 'status' => 1]);
+
+    // The first view still gives the correct result. It filled the cache.
+    $response = $this->request($this->jsonApiRequest('jsonapi_views_test_node_view', 'page_1'));
+    $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
+    $document = self::decodeResponse($response);
+    $this->assertSame('node--room', $document['data'][0]['type']);
+
+    // The second view shares the 'node' entity type. It uses the cached
+    // resource types. The result must still show the correct type.
+    $response = $this->request($this->jsonApiRequest('jsonapi_views_test_node_view_2', 'page_1'));
+    $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
+    $document = self::decodeResponse($response);
+    $this->assertNotEmpty($document['data']);
+    $this->assertSame($room->uuid(), $document['data'][0]['id']);
+    $this->assertSame('node--room', $document['data'][0]['type']);
   }
 
   /**
