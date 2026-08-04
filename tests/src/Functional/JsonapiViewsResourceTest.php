@@ -94,10 +94,21 @@ class JsonapiViewsResourceTest extends ViewTestBase {
    */
   protected function assertCacheContext(array $headers, $expected_cache_context) {
     $cache_contexts = explode(' ', $headers['X-Drupal-Cache-Contexts'][0]);
-    $has_expected_context = in_array($expected_cache_context, $cache_contexts, TRUE);
-    $has_parent_context = str_starts_with($expected_cache_context, 'url.query_args:') && in_array('url.query_args', $cache_contexts, TRUE);
+    // Cache contexts are hierarchical: 'url.query_args:page' is a more
+    // specific instance of 'url.query_args', which is itself a more
+    // specific instance of 'url'. A response that varies by a broader
+    // ancestor already accounts for the narrower context, so accept any
+    // ancestor of the expected context as satisfying it.
+    [$base_context] = explode(':', $expected_cache_context, 2);
+    $candidates = [$expected_cache_context, $base_context];
+    $segments = explode('.', $base_context);
+    while (count($segments) > 1) {
+      array_pop($segments);
+      $candidates[] = implode('.', $segments);
+    }
+    $has_expected_context = (bool) array_intersect($candidates, $cache_contexts);
     $this
-      ->assertTrue($has_expected_context || $has_parent_context, "'" . $expected_cache_context . "' is present in the X-Drupal-Cache-Contexts header.");
+      ->assertTrue($has_expected_context, "'" . $expected_cache_context . "' is present in the X-Drupal-Cache-Contexts header.");
   }
 
   /**
