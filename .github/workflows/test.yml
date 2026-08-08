@@ -36,7 +36,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Lint Markdown files
-        run: npx markdownlint-cli README.md CHANGELOG.md
+        run: npm exec --no -- markdownlint-cli README.md CHANGELOG.md
         continue-on-error: ${{ vars.CI_MARKDOWNLINT_IGNORE_FAILURE == '1' }}
 
       - name: Lint code with CSpell

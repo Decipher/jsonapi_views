@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## Unreleased
 
 ### Fixed
 
@@ -14,8 +14,8 @@ and this project adheres to
   Added resource type route default for single-bundle views; fixes broken
   OpenAPI resources export.
 - [#3484714](https://www.drupal.org/project/jsonapi_views/issues/3484714):
-  Cached resource type names per entity type to prevent route conflicts when
-  multiple views share an entity type.
+  Cached resource type names per entity type to reduce repeated route-build
+  work when multiple views share an entity type.
 - [#3503402](https://www.drupal.org/project/jsonapi_views/issues/3503402):
   Cast bundle ID to string in route resource type lookup so numeric bundle
   machine names no longer cause failing assertions.
@@ -32,14 +32,14 @@ and this project adheres to
   Applied drupal-extension-scaffold v4.17.0, added GitLab CI pipeline, and
   resolved PHPStan, ESLint, and CSpell compatibility across Drupal 10 and 11.
 
-## [8.x-1.1] - 2023-02-10
+## 8.x-1.1 (2023-02-10)
 
 ### Fixed
 
 - [#3288151](https://www.drupal.org/project/jsonapi_views/issues/3288151):
   Automated Drupal 10 compatibility fixes.
 
-## [8.x-1.0] - 2021-10-01
+## 8.x-1.0 (2021-10-01)
 
 ### Added
 
@@ -59,14 +59,14 @@ and this project adheres to
 - [#3228973](https://www.drupal.org/project/jsonapi_views/issues/3228973):
   Fixed argument order for `implode` and removed error messages.
 
-## [8.x-1.0-beta3] - 2021-06-17
+## 8.x-1.0-beta3 (2021-06-17)
 
 ### Fixed
 
 - [#3202583](https://www.drupal.org/project/jsonapi_views/issues/3202583):
   Views cache settings not added to response headers.
 
-## [8.x-1.0-beta2] - 2021-03-24
+## 8.x-1.0-beta2 (2021-03-24)
 
 ### Added
 
@@ -78,7 +78,7 @@ and this project adheres to
 - [#3200875](https://www.drupal.org/project/jsonapi_views/issues/3200875):
   Fixed error with pager.
 
-## [8.x-1.0-beta1] - 2021-02-08
+## 8.x-1.0-beta1 (2021-02-08)
 
 ### Added
 
