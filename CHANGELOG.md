@@ -10,21 +10,12 @@ and this project adheres to
 
 ### Fixed
 
-- [#3265781](https://www.drupal.org/project/jsonapi_views/issues/3265781):
-  Added resource type route default for single-bundle views; fixes broken
-  OpenAPI resources export.
 - [#3484714](https://www.drupal.org/project/jsonapi_views/issues/3484714):
   Cached resource type names per entity type to reduce repeated route-build
   work when multiple views share an entity type.
 - [#3503402](https://www.drupal.org/project/jsonapi_views/issues/3503402):
   Cast bundle ID to string in route resource type lookup so numeric bundle
   machine names no longer cause failing assertions.
-- [#3376193](https://www.drupal.org/project/jsonapi_views/issues/3376193):
-  Used the filter identifier (not the internal name) when building the
-  preview URL.
-- [#3202583](https://www.drupal.org/project/jsonapi_views/issues/3202583):
-  Added Views cache settings to response headers and skipped view execution
-  for access-denied requests.
 
 ### Changed
 
