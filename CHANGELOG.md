@@ -13,6 +13,9 @@ and this project adheres to
 - [#3202583](https://www.drupal.org/project/jsonapi_views/issues/3202583):
   Propagated the view's full cache metadata (tags, contexts, max-age) to the
   JSON:API response and skipped view execution for access-denied requests.
+- [#3265781](https://www.drupal.org/project/jsonapi_views/issues/3265781):
+  Added the resource type route default for single-bundle views so route
+  introspection tools (for example the OpenAPI module) can resolve them.
 - [#3376193](https://www.drupal.org/project/jsonapi_views/issues/3376193):
   Keyed each exposed filter in the preview URL by its identifier instead of
   its field name, so filters are no longer dropped and no longer raise PHP

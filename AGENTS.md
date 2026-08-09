@@ -85,6 +85,13 @@ Run each tool through its `make` wrapper, never the binary directly:
 - **Dynamic routing**: `Routes::routes()` iterates enabled View displays and
   generates one JSON:API route per display that has the `jsonapi_views`
   display extender enabled.
+- **Resource type route default**: each route always carries the plural
+  `_jsonapi_resource_types` default (every bundle name the view's entity
+  type has). It carries the singular `resource_type` default only when
+  the entity type has exactly one bundle. Tools such as the OpenAPI
+  module's JSON:API discovery read `resource_type` to describe a route.
+  A view with several bundles has no single correct resource type. Its
+  route leaves `resource_type` unset.
 - **Display extender opt-out**: exposure is per-display, not per-view - each
   display's "Expose via JSON:API" checkbox is stored via
   `JsonapiViews::defineOptions()`/`submitOptionsForm()` and read back via

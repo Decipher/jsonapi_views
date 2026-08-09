@@ -11,8 +11,11 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\jsonapi_resources\Kernel\Traits\RequestTrait;
 use Drupal\Tests\node\Traits\NodeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use Drupal\jsonapi\ResourceType\ResourceType;
 use Drupal\jsonapi\ResourceType\ResourceTypeRepositoryInterface;
+use Drupal\jsonapi\Routing\Routes as JsonApiRoutes;
 use Drupal\jsonapi_views\Plugin\views\display_extender\JsonapiViews;
+use Drupal\jsonapi_views\Routing\Routes;
 use Drupal\node\Entity\NodeType;
 use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
@@ -286,6 +289,7 @@ final class JsonapiViewsResourceKernelTest extends KernelTestBase {
     // Each bundle of the shared 'node' entity type must resolve once for
     // the whole rebuild. One call for two views proves the second view
     // used the cache.
+    $this->assertNotEmpty($counting_repository->callsByBundle);
     foreach ($counting_repository->callsByBundle as $key => $count) {
       $this->assertSame(1, $count, "$key resolved more than once across the two views.");
     }
@@ -417,6 +421,98 @@ final class JsonapiViewsResourceKernelTest extends KernelTestBase {
     $this->assertStringContainsString('views-filter[content_type]=room', $markup);
     $this->assertStringContainsString('views-filter[status]=1', $markup);
     $this->assertStringNotContainsString('views-filter[type]', $markup);
+  }
+
+  /**
+   * Tests that a multi-bundle view's route omits the resource type default.
+   *
+   * Some tools read a JSON:API route's "resource_type" default. They use
+   * it to resolve the route to one ResourceType object. The OpenAPI
+   * module's discovery code does this.
+   *
+   * The test fixture's node view has two bundles: location and room.
+   * There is no single correct resource type for it. The route must
+   * leave the default unset. It must not report a fake type.
+   *
+   * See #3265781.
+   */
+  public function testRouteOmitsResourceTypeDefaultForMultiBundleView(): void {
+    $route_provider = $this->container->get('router.route_provider');
+    $route = $route_provider->getRouteByName('jsonapi_views.jsonapi_views_test_node_view.page_1');
+
+    $this->assertFalse($route->hasDefault(JsonApiRoutes::RESOURCE_TYPE_KEY));
+  }
+
+  /**
+   * Tests that a single-bundle view's route carries the real resource type.
+   *
+   * The "user" entity type has exactly one bundle. A view built on it
+   * has one correct resource type.
+   *
+   * See #3265781.
+   */
+  public function testRouteHasResourceTypeDefaultForSingleBundleView(): void {
+    $user_view = View::create([
+      'id' => 'jsonapi_views_test_user_view',
+      'label' => 'JSON:API Views Test User View',
+      'base_table' => 'users_field_data',
+      'display' => [
+        'default' => [
+          'display_plugin' => 'default',
+          'id' => 'default',
+          'display_options' => [
+            'access' => ['type' => 'perm', 'options' => ['perm' => 'access user profiles']],
+          ],
+        ],
+        'page_1' => [
+          'display_plugin' => 'page',
+          'id' => 'page_1',
+          'display_options' => [
+            'path' => 'jsonapi-views-test-user-view',
+          ],
+        ],
+      ],
+    ]);
+    $user_view->save();
+    $this->container->get('router.builder')->rebuild();
+
+    $route_provider = $this->container->get('router.route_provider');
+    $route = $route_provider->getRouteByName('jsonapi_views.jsonapi_views_test_user_view.page_1');
+
+    $resource_type = $route->getDefault(JsonApiRoutes::RESOURCE_TYPE_KEY);
+    $this->assertInstanceOf(ResourceType::class, $resource_type);
+    $this->assertSame('user', $resource_type->getEntityTypeId());
+    $this->assertSame('user', $resource_type->getBundle());
+    $this->assertSame('user--user', $resource_type->getTypeName());
+  }
+
+  /**
+   * Tests that a bundle with no resource type is dropped, not kept as NULL.
+   *
+   * A bundle can exist with no matching resource type. For example,
+   * jsonapi_extras can disable a bundle's JSON:API resource. The route
+   * must drop that bundle. It must not put NULL in
+   * "_jsonapi_resource_types". If only one bundle is left, the route
+   * must use it as the "resource_type" default.
+   *
+   * See #3265781.
+   */
+  public function testRouteDropsBundleWithNoResourceType(): void {
+    $real_repository = $this->container->get('jsonapi.resource_type.repository');
+    assert($real_repository instanceof ResourceTypeRepositoryInterface);
+    $nulling_repository = new NullingResourceTypeRepository($real_repository, 'node', 'room');
+    $this->container->set('jsonapi.resource_type.repository', $nulling_repository);
+    $this->container->get('router.builder')->rebuild();
+
+    $route_provider = $this->container->get('router.route_provider');
+    $route = $route_provider->getRouteByName('jsonapi_views.jsonapi_views_test_node_view.page_1');
+
+    $resource_types = $route->getDefault(Routes::JSONAPI_RESOURCE_TYPES_KEY);
+    $this->assertSame(['node--location'], $resource_types);
+
+    $resource_type = $route->getDefault(JsonApiRoutes::RESOURCE_TYPE_KEY);
+    $this->assertInstanceOf(ResourceType::class, $resource_type);
+    $this->assertSame('location', $resource_type->getBundle());
   }
 
 }
