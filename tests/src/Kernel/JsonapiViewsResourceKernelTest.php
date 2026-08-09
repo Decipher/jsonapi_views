@@ -289,6 +289,7 @@ final class JsonapiViewsResourceKernelTest extends KernelTestBase {
     // Each bundle of the shared 'node' entity type must resolve once for
     // the whole rebuild. One call for two views proves the second view
     // used the cache.
+    $this->assertNotEmpty($counting_repository->callsByBundle);
     foreach ($counting_repository->callsByBundle as $key => $count) {
       $this->assertSame(1, $count, "$key resolved more than once across the two views.");
     }
