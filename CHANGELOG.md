@@ -8,6 +8,8 @@ and this project adheres to
 
 ## Unreleased
 
+## 8.x-1.2 (2026-08-09)
+
 ### Fixed
 
 - [#3202583](https://www.drupal.org/project/jsonapi_views/issues/3202583):
